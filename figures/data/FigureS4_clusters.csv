@@ -1,0 +1,25 @@
+task,map,sign,p,n_electrodes,region,channels
+FAST,TD,positive,0.0016,18,posterior,P1 P3 P5 P7 PO7 PO3 O1 Iz Oz POz Pz P4 P6 P8 P10 PO8 PO4 O2
+FAST,TD,positive,0.0188,11,frontal,Fp1 AF3 F1 F3 FC1 Fpz Fp2 AF8 AFz F6 FC4
+FAST,ASD,positive,0.1612,4,frontal,F3 FC1 F2 FCz
+FAST,ASD,negative,0.317,2,centro-parietal,CP2 P2
+FAST,ASD,positive,0.481,2,frontal,Fp1 Fpz
+FAST,ASD,positive,0.5318,1,frontal,AF8
+FAST,diff,negative,0.004,15,posterior,P5 P7 PO7 PO3 Oz POz Pz CPz P2 P4 P8 P10 PO8 PO4 O2
+FAST,diff,negative,0.6934,1,frontal,FC4
+IC,TD,positive,0.0218,12,posterior,P7 P9 PO7 PO3 O1 Iz Oz POz P8 P10 PO8 O2
+IC,TD,positive,0.1718,4,right frontal,F4 F6 F8 FT8
+IC,TD,positive,0.2626,2,frontal,FC3 FC1
+IC,ASD,positive,0.0652,7,left frontal,Fp1 AF3 F3 F5 FC5 FC3 C3
+IC,ASD,positive,0.1358,4,right frontal,Fp2 AF8 AF4 F8
+IC,ASD,positive,0.235,3,right posterior,P8 P10 PO8
+IC,ASD,positive,0.432,1,posterior,Iz
+IC,diff,,,0,,
+AVSRT,TD,negative,0.051,7,right centro-parietal,Pz CPz CP6 CP4 CP2 P2 P4
+AVSRT,TD,negative,0.4596,1,frontal,FT7
+AVSRT,ASD,negative,0.0366,7,right centro-parietal,Pz CPz C2 C4 CP4 CP2 P4
+AVSRT,ASD,negative,0.5504,1,frontal,F7
+AVSRT,ASD,positive,0.568,1,centro-parietal,P5
+AVSRT,ASD,negative,0.6298,1,frontal,FT8
+AVSRT,ASD,negative,0.734,1,central,T7
+AVSRT,diff,positive,0.6994,1,centro-parietal,P5

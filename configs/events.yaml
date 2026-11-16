@@ -1,0 +1,351 @@
+# Event conventions per task (OpenNeuro ds006780): trial definitions, response windows, trial flags and
+# analysis subsets. Read by utils.config.load_events_config and the trial builders in trials/.
+#
+# Vocabulary
+#   stimulus_codes        every presented stimulus of the task (used for SOA and lookback contamination)
+#   trial_codes           stimuli that become rows of the trial table (every one of them is a row)
+#   target_codes          trial stimuli that call for a response (outcome hit/miss, RT, previous outcome)
+#   response_codes        button-press codes
+#   response_bound_codes  the response window of a trial closes at the onset of the next event with one
+#                         of these codes in the same run (must include every trial code)
+#   marker_codes          structure markers (Status-only 201/202/203, or tsv markers such as IC 199)
+#   block_start_codes     subset of marker_codes whose onsets start a new block
+#   rt_targets_only       (optional, default false) RT columns are cleared on non-target rows
+#   soa_strata_ms         (optional) increasing SOA edges for the soa_stratum column
+#   truncated_post_s      (optional) data needed after onset; less -> post_stim_truncated (default: primary hi)
+#   history_homogeneous   per-task stratum: previous target a hit, the last press is its matched response, that
+#                         press lies press_lag_ms before onset, no join since the previous target. FAST and IC use
+#                         their own central lag range (pooled p10-p90 of time since the last press in primary_rt,
+#                         rounded outwards to 0.5 s).
+#   misattribution        fast_rt_ms: RT threshold of flag_rt_fast_after_no_press; applies: false sets the flag NA
+#                         (FAST: the previous row is a non-target that expects no press; IC: the previous flip is
+#                         seconds away, median 6.8 s)
+#
+#   prestim_windows_ms    (optional) prestimulus alpha windows [start, stop) ms relative to onset (primary window and
+#                         window-length variants); each gets an edge_valid_<name> flag: no bit-16 join and no file
+#                         edge within prestim_edge_margin_s of either window edge
+#   prestim_edge_margin_s FIR half-length: 1-40 Hz zero-phase FIR at 512 Hz has 1691 taps -> 845 samples = 1.65 s
+#   press_clear_ms        (optional) press_clear_<X>: no press in [onset - X ms, onset)
+#   join_near_lookback_ms (optional) lookback of the join_near_window proxy column (default: the longest lookback)
+#   nonperformance        (FAST, IC) child rule: hit rate < min_hit_rate or false alarms > hits;
+#                         false_alarm_unit fixes what a false alarm is (trials.child_qc)
+#
+# Analysis subsets
+#   Keys: require_true / require_false (boolean columns; a missing value never satisfies a requirement),
+#   extends (inherit the requirements of another subset; resolved at load time), outcome_independent (the loader
+#   refuses any column that depends on the response to the current stimulus), description.
+#   Per task, named in this order:
+#     trial_exclusions   trial exclusions only (no window rule, no outcome)
+#     predictor_set      trial_exclusions + clean lookback L + edge validity, whatever the response. Used for alpha
+#                        centring and scaling and for the miss models.
+#     primary_rt         RT analysis set = predictor_set + hit (+ AVSRT RT >= 150 ms); a subset of it
+#     s_* / sens_*       sensitivity sets, each a subset of its own predictor set
+#
+# Every analysis subset requires stim_unverified and post_stim_truncated to be False (row-level event integrity).
+#
+# PRIMARY RESPONSE RULE (all tasks):
+#   The RT of a trial is the latency of the FIRST press whose latency from stimulus onset lies in the
+#   closed interval [lo, hi] ms of the primary window, AND whose onset is at or after the stimulus onset
+#   AND strictly before the onset of the next response_bound event of the same run. Presses with latency
+#   < lo inside that interval are anticipations: they are skipped (a later valid press still counts) and
+#   counted. A trial without such a press is a miss (targets) or a no-press (non-targets). Sensitivity
+#   windows apply the same rule with their own [lo, hi]. The raw first press after onset is also recorded
+#   regardless of window and of the next stimulus.
+# Lookback contamination flag for length L: a press, or a stimulus onset, in [t0 - L, t0).
+
+response_rule: >-
+  first press with latency in [lo, hi] ms (closed), at or after stimulus onset and strictly before the
+  onset of the next response_bound event in the same run; presses with latency < lo are skipped and counted
+  as anticipations
+
+status:
+  channel: Status
+  event_mask: 0xFFFF          # low 16 bits carry Presentation trigger codes (bits 8-15 unused in practice)
+  join_bit: 16                # BioSemi "new epoch" bit: rises at save/segment joins on 1-s record boundaries
+  shortest_event: 1           # pulses can be 1 sample wide
+  stuck_code_min_samples: 512 # a non-zero code held >= 1 s is reported as stuck
+  status_only_marker_codes: [199, 201, 202, 203]
+  sample_onset_tolerance: 0   # events.tsv sample must equal round(onset * sfreq) exactly
+
+tasks:
+  AVSRT:
+    role: primary
+    stimulus_codes: {3: AV, 4: A, 5: V}
+    trial_codes: [3, 4, 5]
+    target_codes: [3, 4, 5]
+    response_codes: [1]
+    response_bound_codes: [3, 4, 5]
+    marker_codes: {201: block_start, 50: rest_start_next_block}
+    block_start_codes: [201]
+    rt_windows_ms:
+      primary: [100, 1500]           # bounded by the next stimulus; primary_rt also requires RT >= 150 ms (rt_lt150)
+      sens_150_1500: [150, 1500]
+      sens_100_1000: [100, 1000]
+      sens_100_2000: [100, 2000]
+    primary_window: primary
+    lookbacks_ms: [800, 1000, 1200, 1500]
+    soa_strata_ms: [1100, 1500, 1900, 2300, 2700, 3200]   # within-block SOA maximum 3184 ms
+    prestim_windows_ms:              # 800-ms primary window and 500 / 1000-ms variants; every window ends 50 ms before onset
+      primary: [-850, -50]
+      s_w500: [-550, -50]
+      s_w1000: [-1050, -50]
+    prestim_edge_margin_s: 1.65
+    press_clear_ms: [1850]           # previous press >= 1.85 s before onset (the window starts >= 1 s after it)
+    join_padding_ms: 1000            # filter padding added before the longest lookback
+    join_post_ms: 1500               # join proximity also checked up to onset + 1.5 s
+    history_homogeneous:
+      prev_outcome: hit
+      press_lag_ms: [1000, 3000]
+      last_press_is_prev_response: true
+      no_join_since_prev_target: true
+    misattribution:
+      fast_rt_ms: 200                # RT < 200 ms after a stimulus with no press
+      applies: true
+    avsrt:                           # AvsrtTrialBuilder parameters (trials/avsrt.py)
+      post_gap_s: 3.2                # SOA above this is not within-block (within-block max 3.184 s)
+      pause_s: 8.0                   # gaps longer than this are pauses/restarts, never dropped triggers
+      mean_soa_s: 2.166              # mean within-block SOA, estimates the number of dropped stimuli
+      nominal_block_size: 100
+      boundary_tol: 2                # running nominal count within +-2 of a multiple of 100 = block boundary
+      partial_first_min_next: 98     # first segment followed by >= 98 stimuli = late recording start
+      low_press_rate: 0.2            # segments with any-press rate below this are flagged
+      rt_strict_ms: 150              # stricter response-attribution threshold (rt_lt150)
+    analysis_subsets:
+      # Repeated-block runs are kept; in_repeated_block_run stays a child-table column.
+      trial_exclusions:
+        description: AVSRT trial exclusions (first_after_block_marker = the first stimulus after each 201)
+        outcome_independent: true
+        require_false: [excluded_known_issue, post_gap, prestim_has_unlogged_stim, next_is_dropped_trigger,
+                        in_aborted_segment, low_press_rate_segment, first_after_block_marker, stim_unverified,
+                        post_stim_truncated]
+      predictor_set:
+        description: predictor set (800-ms window, L = 1000 ms, edge validity), whatever the response; alpha centring and scaling, miss model
+        extends: trial_exclusions
+        outcome_independent: true
+        require_true: [clean_all_lookback_1000, edge_valid_primary]
+      primary_rt:
+        description: RT analysis set = predictor set, hit (first press in [100, 1500] ms), RT >= 150 ms
+        extends: predictor_set
+        require_true: [responded]
+        require_false: [rt_lt150]
+      sens_misattribution:
+        description: also drops (prev_trial_no_press and RT < 200 ms) and kept presses preceded by an anticipation
+        extends: primary_rt
+        require_false: [flag_rt_fast_after_no_press, anticipation_before_kept_press]
+      s_press_rt:
+        description: previous press >= 1.85 s before onset (the 800-ms window starts >= 1 s after it)
+        extends: primary_rt
+        require_true: [press_clear_1850]
+      s_hh_rt:
+        description: history-homogeneous trials (lag window 1000-3000 ms)
+        extends: primary_rt
+        require_true: [history_homogeneous]
+      s_w500_predictor_set:
+        description: 500-ms window predictor set; window [-550, -50) ms, L = 1000 ms
+        extends: trial_exclusions
+        outcome_independent: true
+        require_true: [clean_all_lookback_1000, edge_valid_s_w500]
+      s_w500_rt:
+        description: 500-ms window RT set
+        extends: s_w500_predictor_set
+        require_true: [responded]
+        require_false: [rt_lt150]
+      s_w1000_predictor_set:
+        description: 1000-ms window predictor set; window [-1050, -50) ms, L = 1200 ms
+        extends: trial_exclusions
+        outcome_independent: true
+        require_true: [clean_all_lookback_1200, edge_valid_s_w1000]
+      s_w1000_rt:
+        description: 1000-ms window RT set
+        extends: s_w1000_predictor_set
+        require_true: [responded]
+        require_false: [rt_lt150]
+      sens_keep_low_press_rate_predictor_set:
+        description: predictor set without the behaviour-informed segment rule low_press_rate_segment (known-issue faults stay excluded)
+        outcome_independent: true
+        require_true: [clean_all_lookback_1000, edge_valid_primary]
+        require_false: [excluded_known_issue, post_gap, prestim_has_unlogged_stim, next_is_dropped_trigger,
+                        in_aborted_segment, first_after_block_marker, stim_unverified, post_stim_truncated]
+      sens_keep_low_press_rate_rt:
+        description: RT set of sens_keep_low_press_rate_predictor_set
+        extends: sens_keep_low_press_rate_predictor_set
+        require_true: [responded]
+        require_false: [rt_lt150]
+
+  FAST:
+    role: primary
+    stimulus_codes:
+      21: Face_upright
+      22: Face_inverted
+      31: Object_upright
+      32: Object_inverted
+      121: Face_upright_shadow
+      122: Face_inverted_shadow
+      131: Object_upright_shadow
+      132: Object_inverted_shadow
+    trial_codes: [21, 22, 31, 32, 121, 122, 131, 132]   # every stimulus is a row; targets flagged
+    target_codes: [121, 122, 131, 132]
+    rt_targets_only: true            # non-targets carry false alarms, not RTs
+    response_codes: [1]
+    response_bound_codes: [21, 22, 31, 32, 121, 122, 131, 132]
+    marker_codes: {201: block_start_or_midblock_pause, 202: face_block_start, 203: object_block_start}
+    block_start_codes: [202, 203]    # 201 + 202/203 = block start; a lone 201 is the mid-block pause. The builder
+                                     # places every block start (base and FAST columns) at the 201 of the pair
+    rt_windows_ms:
+      primary: [150, 1000]           # ends before the shortest SOA (1115 ms)
+      sens_100_1500: [100, 1500]
+      sens_150_1200: [150, 1200]
+    primary_window: primary
+    lookbacks_ms: [400, 500, 600, 700]
+    join_near_lookback_ms: 600       # lookback of the join_near_window proxy column
+    soa_strata_ms: [1100, 1180, 1250, 1330]   # SOA p1-p99 1115-1316 ms, median 1217
+    prestim_windows_ms:              # 500-ms primary window and a 400-ms variant
+      primary: [-550, -50]
+      s_w400: [-450, -50]
+    prestim_edge_margin_s: 1.65
+    nonperformance:                  # child exclusion: hit rate < 0.5 or more false alarms than hits
+      min_hit_rate: 0.5
+      false_alarm_unit: nontarget_trials   # non-target rows with >= 1 non-transition press (column false_alarm)
+    join_padding_ms: 1000
+    join_post_ms: 1500
+    history_homogeneous:
+      prev_outcome: hit
+      press_lag_ms: [3000, 9500]     # pooled primary_rt time since last press p10 3.06 s, p90 9.44 s
+      last_press_is_prev_response: true
+      no_join_since_prev_target: true
+    misattribution:
+      fast_rt_ms: 200
+      applies: false                 # the previous row is a non-target (no press expected): no misattribution path
+    block_transition_press_max_s: 0.5   # press <= 0.5 s before a block start is a transition press
+    block_structure:                    # read by trials.fast
+      pair_max_s: 0.2                   # 201 then 202/203 within < 0.2 s (other codes may intervene) = block start
+      nominal_block_size: 60
+      missing_trigger_tolerance: 1      # size + lost triggers >= 59 is not partial
+      lost_trigger_soa_ms: 1400         # within-half SOA above this hides round(SOA / nominal_soa_ms) - 1 stimuli
+      nominal_soa_ms: 1217              # median within-half SOA; max nominal 1316
+      segment_gap_s: 2.0                # first_in_segment: SOA > 2 s or a join
+    truncated_post_s: 1.0               # < 1 s of data after onset -> post_stim_truncated
+    analysis_subsets:
+      # 13-block sessions are kept.
+      trial_exclusions:
+        description: FAST trial exclusions on targets (first_after_break; first_in_segment)
+        outcome_independent: true
+        require_true: [is_target]
+        require_false: [excluded_known_issue, before_first_block_marker, first_in_segment, first_after_break,
+                        last_in_run, stim_unverified, post_stim_truncated]
+      predictor_set:
+        description: predictor set (500-ms window, L = 700 ms, edge validity), whatever the response; alpha centring and scaling, miss model
+        extends: trial_exclusions
+        outcome_independent: true
+        require_true: [clean_all_lookback_700, edge_valid_primary]
+      primary_rt:
+        description: RT analysis set = predictor set and hit (first press in [150, 1000] ms)
+        extends: predictor_set
+        require_true: [responded]
+        require_false: []
+      s_hh_rt:
+        description: history-homogeneous targets (lag window 3000-9500 ms)
+        extends: primary_rt
+        require_true: [history_homogeneous]
+      s_w400_predictor_set:
+        description: 400-ms window predictor set; window [-450, -50) ms, L = 700 ms
+        extends: trial_exclusions
+        outcome_independent: true
+        require_true: [clean_all_lookback_700, edge_valid_s_w400]
+      s_w400_rt:
+        description: 400-ms window RT set
+        extends: s_w400_predictor_set
+        require_true: [responded]
+      sens_keep_first_after_break:
+        description: first-after-break targets kept (first_in_segment, which contains them, also not applied)
+        require_true: [is_target, responded, clean_all_lookback_700, edge_valid_primary]
+        require_false: [excluded_known_issue, before_first_block_marker, last_in_run, stim_unverified,
+                        post_stim_truncated]
+
+  IC:
+    role: primary
+    stimulus_codes: {20: Illusory_contours, 21: Non_Illusory_contours, 77: Dot_flip}
+    trial_codes: [77]
+    target_codes: [77]
+    response_codes: [100]
+    response_bound_codes: [77]       # next FLIP; the next contour (+0.70 s) does not close the window
+    marker_codes: {199: pause, 201: sequence_start_or_pause_end}
+    block_start_codes: [199]         # block = segment after each 199 pause
+    rt_windows_ms:
+      primary: [150, 1200]
+      sens_100_1500: [100, 1500]
+      sens_200_1000: [200, 1000]
+    primary_window: primary
+    lookbacks_ms: [300, 400, 500, 700, 1000]
+    soa_strata_ms: [900, 1100, 1300, 1520]   # previous contour -> flip 0.916-1.516 s in-stream
+    prestim_windows_ms:              # 500-ms primary window and a 400-ms variant
+      primary: [-550, -50]
+      s_w400: [-450, -50]
+    prestim_edge_margin_s: 1.65
+    nonperformance:                  # child exclusion: hit rate < 0.5 or more false alarms than hits
+      min_hit_rate: 0.5
+      false_alarm_unit: presses      # presses no flip's primary window explains (press class false_alarm)
+    join_padding_ms: 1000
+    join_post_ms: 1500
+    history_homogeneous:
+      prev_outcome: hit
+      press_lag_ms: [2500, 11000]    # pooled primary_rt time since last press p10 2.63 s, p90 10.9 s
+      last_press_is_prev_response: true
+      no_join_since_prev_target: true
+    misattribution:
+      fast_rt_ms: 200
+      applies: false                 # the previous flip is seconds away (median 6.8 s): no misattribution path
+    ic:                              # IC builder parameters (trials.ic.IcParams)
+      contour_codes: [20, 21]        # contour stream (context, not trial rows)
+      pause_codes: [199]
+      sequence_marker_codes: [201]   # Status-only
+      pause_resume_201_max_s: 4.0    # 201 within 4 s after a 199 = pause end; else (after 1st contour) sequence start
+      sequence_n_contours: 180       # three 180-contour sequences per full run
+      nominal_contours: 540          # complete run / session; count-based reference flags beyond_nominal_contours_*
+      sequence_complete_min_contours: 175   # a 180-contour sequence with >= 175 onsets is complete (observed 177-180;
+                                            #   the next smaller sizes are 163 and below)
+      cap_complete_sequences: 3      # flips after the child's 3rd complete sequence -> beyond_ic_cap
+      late_hit_ms: 700               # next contour comes ~700 ms after a flip
+      vep_gap_ms: 500                # stricter window: lookback starts >= 500 ms after the previous contour
+      foreign_detection:             # foreign-paradigm trigger segment in a recording
+        min_count: 10
+        allowed_status_codes: [20, 21, 77, 100, 199, 201, 116, 117]   # 116/117 = press OR contour collisions
+      collision_press_codes: [100, 116, 117]   # Status-only press-bit onsets (dropped by the tsv export), counted per window
+    analysis_subsets:
+      trial_exclusions:
+        description: IC trial exclusions (in-stream flips; the 540-contour cap at child level)
+        outcome_independent: true
+        require_false: [excluded_known_issue, post_pause_first_flip, after_foreign_cut, beyond_ic_cap,
+                        stim_unverified, post_stim_truncated]
+      predictor_set:
+        description: predictor set (500-ms window, L = 700 ms incl. contours, flips, presses and 199/201 markers, edge validity), whatever the response; alpha centring and scaling, miss model
+        extends: trial_exclusions
+        outcome_independent: true
+        require_true: [clean_all_lookback_700, edge_valid_primary]
+      primary_rt:
+        description: RT analysis set = predictor set and hit (first press in [150, 1200] ms)
+        extends: predictor_set
+        require_true: [responded]
+        require_false: []
+      s_hh_rt:
+        description: history-homogeneous flips (lag window 2500-11000 ms)
+        extends: primary_rt
+        require_true: [history_homogeneous]
+      s_w400_predictor_set:
+        description: 400-ms window predictor set; window [-450, -50) ms, L = 700 ms
+        extends: trial_exclusions
+        outcome_independent: true
+        require_true: [clean_all_lookback_700, edge_valid_s_w400]
+      s_w400_rt:
+        description: 400-ms window RT set
+        extends: s_w400_predictor_set
+        require_true: [responded]
+      sens_complete_sequences_predictor_set:
+        description: alternative reading of the sequence cap; also drops flips in incomplete 180-contour sequences (fragments before a restart)
+        extends: predictor_set
+        outcome_independent: true
+        require_true: [seq180_complete]
+      sens_complete_sequences_rt:
+        description: RT set of sens_complete_sequences_predictor_set
+        extends: sens_complete_sequences_predictor_set
+        require_true: [responded]

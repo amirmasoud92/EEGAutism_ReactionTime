@@ -1,0 +1,9 @@
+task,map,sign,p,n_electrodes,region,channels
+FAST,TD,positive,0.0016,18,posterior,P1 P3 P5 P7 PO7 PO3 O1 Iz Oz POz Pz P4 P6 P8 P10 PO8 PO4 O2
+FAST,TD,positive,0.0188,11,frontal,Fp1 AF3 F1 F3 FC1 Fpz Fp2 AF8 AFz F6 FC4
+FAST,ASD,positive,0.1612,4,frontal,F3 FC1 F2 FCz
+FAST,ASD,negative,0.317,2,centro-parietal,CP2 P2
+FAST,ASD,positive,0.481,2,frontal,Fp1 Fpz
+FAST,ASD,positive,0.5318,1,frontal,AF8
+FAST,diff,negative,0.004,15,posterior,P5 P7 PO7 PO3 Oz POz Pz CPz P2 P4 P8 P10 PO8 PO4 O2
+FAST,diff,negative,0.6934,1,frontal,FC4

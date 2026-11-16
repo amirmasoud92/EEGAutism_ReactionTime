@@ -1,0 +1,455 @@
+# Spline knot table of the models (modeling/knots.py): knots of every ns() term and the centring medians.
+quantile_rule:
+  spline: splines::ns(x, knots = interior_knots, Boundary.knots = boundary_knots); no intercept
+  interior_knots: pooled quantiles at probabilities k / df, k = 1 .. df - 1 (R quantile type 7)
+  boundary_knots: pooled minimum and maximum of the finite values
+  rows: the model's trial-table analysis subset (configs/events.yaml) of every child with >= 30 rows and, FAST / IC,
+    without behavioural non-performance; pooled over all children; EEG window rules not applied (trial tables only;
+    no EEG, no alpha, no group)
+  equivalence: on the pooled rows identical to ns(x, df)
+  z_scored_terms: t_run and tib are z-scored within child x task over the model rows before ns()
+definitions:
+  log_tsp: ln(min(t_since_prev_press_ms_concat / 1000, 10)); + prev_press_crosses_join indicator
+  soa: soa_prev_ms_concat / 1000 (AVSRT; FAST soa_prev linear, centred at the median)
+  t_run: z(trial_index_in_run) within child x task over the model rows
+  tib: z(position in block) within child x task over the model rows; AVSRT trial_in_block; FAST position among all images
+    of the half-block (block_status x half_status); IC position among the flips of the 180-contour sequence (seq180_index)
+  log_tsfl: ln(t_since_prev_flip_ms_concat / 1000) (IC)
+  t_since_prev_contour: t_since_prev_contour_ms_concat / 1000 (IC)
+  win_start_lag: soa_prev_ms_concat / 1000 + window start (-0.85 s AVSRT, -0.55 s FAST / IC)
+models:
+  M1:
+    task: AVSRT
+    rows: configs/events.yaml AVSRT.primary_rt
+    child_rules: '>= 30 rows'
+    n_children: 121
+    n_rows: 35582
+    n_children_before_child_rules: 121
+    n_rows_before_child_rules: 35582
+    n_children_lt_min_rows: 0
+    n_children_nonperformance: 0
+    note: also M1-H2, M1-hist (rows where a_hist5 is defined use the same knots), M1-raw, A3-NL (ns(t_run, 3), ns(tib, 3)),
+      S-CENS, H1-A, S5, S6 and the AVSRT part of M5h
+    terms:
+      ns(log_tsp, 4):
+        variable: log_tsp
+        df: 4
+        probs:
+        - 0.25
+        - 0.5
+        - 0.75
+        interior_knots:
+        - 0.38441169891033206
+        - 0.6603899092904802
+        - 0.8877626482596169
+        boundary_knots:
+        - 0.0019512201312617493
+        - 2.302585092994046
+        n: 35557
+        n_distinct: 2237
+        n_missing: 25
+        median: 0.6603899092904802
+        frac_at_cap: 0.002643642602019293
+      ns(soa, 4):
+        variable: soa
+        df: 4
+        probs:
+        - 0.25
+        - 0.5
+        - 0.75
+        interior_knots:
+        - 1.81640625
+        - 2.28125
+        - 2.732421875
+        boundary_knots:
+        - 1.166015625
+        - 3.18359375
+        n: 35580
+        n_distinct: 248
+        n_missing: 2
+        median: 2.28125
+      ns(t_run, 3):
+        variable: t_run
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - -0.5900284700069963
+        - 0.5652018777734386
+        boundary_knots:
+        - -1.8870962006001573
+        - 2.081567579439475
+        n: 35582
+        n_distinct: 34822
+        n_missing: 0
+        median: -0.025564592075648263
+      ns(tib, 3):
+        variable: tib
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - -0.5857698755838281
+        - 0.5717547257961393
+        boundary_knots:
+        - -1.883277537467128
+        - 1.9626616588721049
+        n: 35582
+        n_distinct: 11746
+        n_missing: 0
+        median: -0.008691895777280544
+  M2:
+    task: AVSRT
+    rows: configs/events.yaml AVSRT.predictor_set
+    child_rules: '>= 30 rows'
+    n_children: 121
+    n_rows: 39663
+    n_children_before_child_rules: 121
+    n_rows_before_child_rules: 39663
+    n_children_lt_min_rows: 0
+    n_children_nonperformance: 0
+    note: all stimuli with a valid predictor (M2); S1-U, S1-A, E2
+    terms:
+      ns(log_tsp, 3):
+        variable: log_tsp
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - 0.4891070998113477
+        - 0.832399482220769
+        boundary_knots:
+        - 0.0019512201312617493
+        - 2.302585092994046
+        n: 39589
+        n_distinct: 2659
+        n_missing: 74
+        median: 0.6724261629224277
+        frac_at_cap: 0.009421809088383137
+      ns(soa, 3):
+        variable: soa
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - 1.96484375
+        - 2.56640625
+        boundary_knots:
+        - 1.166015625
+        - 3.18359375
+        n: 39660
+        n_distinct: 248
+        n_missing: 3
+        median: 2.265625
+      ns(t_run, 3):
+        variable: t_run
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - -0.5861983319035006
+        - 0.5669863455111979
+        boundary_knots:
+        - -1.9241056103372192
+        - 2.1398175406469804
+        n: 39663
+        n_distinct: 38719
+        n_missing: 0
+        median: -0.018785508519622622
+      ns(tib, 3):
+        variable: tib
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - -0.5810701656899885
+        - 0.5753547893805877
+        boundary_knots:
+        - -1.7976899088262268
+        - 1.8474876224381578
+        n: 39663
+        n_distinct: 11924
+        n_missing: 0
+        median: -0.004254601809433853
+  M3:
+    task: FAST
+    rows: configs/events.yaml FAST.primary_rt
+    child_rules: '>= 30 rows and the behavioural non-performance rule'
+    n_children: 115
+    n_rows: 14739
+    n_children_before_child_rules: 128
+    n_rows_before_child_rules: 15399
+    n_children_lt_min_rows: 6
+    n_children_nonperformance: 7
+    note: also M3-H2 and the FAST part of M5h; soa_prev is linear (median below)
+    terms:
+      ns(log_tsp, 3):
+        variable: log_tsp
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - 1.2307592598817267
+        - 1.7606825882044466
+        boundary_knots:
+        - -0.3522205935893521
+        - 2.302585092994046
+        n: 14717
+        n_distinct: 3097
+        n_missing: 22
+        median: 1.5079760371919313
+        frac_at_cap: 0.08785757966976965
+      ns(t_run, 3):
+        variable: t_run
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - -0.5844417166767862
+        - 0.5658384332063491
+        boundary_knots:
+        - -2.1512088812641967
+        - 2.042387290079306
+        n: 14739
+        n_distinct: 14717
+        n_missing: 0
+        median: -0.019321122569919684
+      ns(tib, 3):
+        variable: tib
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - -0.5722526213787174
+        - 0.5911330338345325
+        boundary_knots:
+        - -2.0455180994804256
+        - 1.859869226561467
+        n: 14739
+        n_distinct: 3163
+        n_missing: 0
+        median: 0.0
+  M4:
+    task: IC
+    rows: configs/events.yaml IC.primary_rt
+    child_rules: '>= 30 rows and the behavioural non-performance rule'
+    n_children: 115
+    n_rows: 10679
+    n_children_before_child_rules: 126
+    n_rows_before_child_rules: 11154
+    n_children_lt_min_rows: 4
+    n_children_nonperformance: 7
+    note: also M4-H2 and the IC part of M5h
+    terms:
+      ns(log_tsfl, 3):
+        variable: log_tsfl
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - 1.6889997352702861
+        - 2.115878937882267
+        boundary_knots:
+        - 0.5584990932353476
+        - 4.258130592254655
+        n: 10576
+        n_distinct: 1341
+        n_missing: 103
+        median: 1.9216220305390397
+      ns(t_since_prev_contour, 3):
+        variable: t_since_prev_contour
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - 1.1484375
+        - 1.349609375
+        boundary_knots:
+        - 0.916015625
+        - 3.6484375
+        n: 10679
+        n_distinct: 79
+        n_missing: 0
+        median: 1.25
+      ns(log_tsp, 3):
+        variable: log_tsp
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - 1.5972546216304573
+        - 2.105229209965609
+        boundary_knots:
+        - -0.3494466667066269
+        - 2.302585092994046
+        n: 10594
+        n_distinct: 3810
+        n_missing: 85
+        median: 1.8762992613805909
+        frac_at_cap: 0.16414951859543137
+      ns(tib, 3):
+        variable: tib
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - -0.576726388579729
+        - 0.5444557930407427
+        boundary_knots:
+        - -1.789246456161989
+        - 2.192141728803971
+        n: 10679
+        n_distinct: 4434
+        n_missing: 0
+        median: -0.01641531887598035
+      ns(t_run, 3):
+        variable: t_run
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - -0.5712351296413565
+        - 0.563237029113503
+        boundary_knots:
+        - -2.112886526552732
+        - 2.2110497068292125
+        n: 10679
+        n_distinct: 10620
+        n_missing: 0
+        median: -0.019745481676427767
+  S-LAG_AVSRT:
+    task: AVSRT
+    rows: configs/events.yaml AVSRT.primary_rt
+    child_rules: '>= 30 rows'
+    n_children: 121
+    n_rows: 35582
+    n_children_before_child_rules: 121
+    n_rows_before_child_rules: 35582
+    n_children_lt_min_rows: 0
+    n_children_nonperformance: 0
+    note: added to M1 (S-LAG); in AVSRT win_start_lag = soa - 0.85 s exactly
+    terms:
+      ns(win_start_lag, 3):
+        variable: win_start_lag
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - 1.116796875
+        - 1.73203125
+        boundary_knots:
+        - 0.316015625
+        - 2.33359375
+        n: 35580
+        n_distinct: 248
+        n_missing: 2
+        median: 1.43125
+  S-LAG_FAST:
+    task: FAST
+    rows: configs/events.yaml FAST.primary_rt
+    child_rules: '>= 30 rows and the behavioural non-performance rule'
+    n_children: 115
+    n_rows: 14739
+    n_children_before_child_rules: 128
+    n_rows_before_child_rules: 15399
+    n_children_lt_min_rows: 6
+    n_children_nonperformance: 7
+    note: added to M3; win_start_lag = soa_prev - 0.55 s
+    terms:
+      ns(win_start_lag, 3):
+        variable: win_start_lag
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - 0.63359375
+        - 0.7
+        boundary_knots:
+        - 0.565234375
+        - 0.76640625
+        n: 14739
+        n_distinct: 27
+        n_missing: 0
+        median: 0.666796875
+  S-LAG_IC:
+    task: IC
+    rows: configs/events.yaml IC.primary_rt
+    child_rules: '>= 30 rows and the behavioural non-performance rule'
+    n_children: 115
+    n_rows: 10679
+    n_children_before_child_rules: 126
+    n_rows_before_child_rules: 11154
+    n_children_lt_min_rows: 4
+    n_children_nonperformance: 7
+    note: added to M4; previous onset = previous contour or flip
+    terms:
+      ns(win_start_lag, 3):
+        variable: win_start_lag
+        df: 3
+        probs:
+        - 0.3333333333333333
+        - 0.6666666666666666
+        interior_knots:
+        - 0.5984375
+        - 0.799609375
+        boundary_knots:
+        - 0.36601562499999996
+        - 2.38359375
+        n: 10679
+        n_distinct: 79
+        n_missing: 0
+        median: 0.7
+centring_medians:
+  M1:
+    log_tsp: 0.6603899092904802
+    soa: 2.28125
+    win_start_lag: 1.43125
+    t_run: -0.025564592075648263
+    tib: -0.008691895777280544
+    task_start_h (child level): 2.4880555555555555
+    n_children_task_start_h: 114
+  M2:
+    log_tsp: 0.6724261629224277
+    soa: 2.265625
+    win_start_lag: 1.415625
+    t_run: -0.018785508519622622
+    tib: -0.004254601809433853
+    task_start_h (child level): 2.4880555555555555
+    n_children_task_start_h: 114
+  M3:
+    log_tsp: 1.5079760371919313
+    soa: 1.216796875
+    win_start_lag: 0.666796875
+    t_run: -0.019321122569919684
+    tib: 0.0
+    soa_prev: 1.216796875
+    task_start_h (child level): 0.10833333333333334
+    n_children_task_start_h: 111
+  M4:
+    log_tsp: 1.8762992613805909
+    soa: 1.25
+    win_start_lag: 0.7
+    t_run: -0.019745481676427767
+    tib: -0.01641531887598035
+    log_tsfl: 1.9216220305390397
+    t_since_prev_contour: 1.25
+    task_start_h (child level): 2.2091666666666665
+    n_children_task_start_h: 107
+not_covered: age_c is centred at the pooled mean at model time (participants; not a knot); E8 FAST/IC miss models (pooled
+  fixed a_wb only) and M6 have no ns() term

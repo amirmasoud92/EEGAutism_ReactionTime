@@ -1,0 +1,100 @@
+# Trial-level prestimulus alpha features.
+# Read by utils.config_features.load_features_config; used by feature_extraction.{spectral, prestimulus_alpha,
+# decomposition} and trials.context_counts.
+#
+# Units: data are scaled from MNE volts to microvolts before any spectrum, so PSDs are in uV^2/Hz and alpha is
+# log10(uV^2/Hz). Windows are [start, stop) ms relative to stimulus onset; samples = onset + round(ms x sfreq / 1000)
+# (the convention of the edge_valid_<window> flags of the trial tables).
+
+version: "1"                            # label of this file
+
+alpha:
+  units:
+    data_scale: 1000000.0               # V -> uV; alpha in log10(uV^2/Hz)
+  windows:
+    # Must equal configs/events.yaml prestim_windows_ms (checked by the loader against the events config).
+    expected_ms:
+      AVSRT: {primary: [-850, -50], s_w500: [-550, -50], s_w1000: [-1050, -50]}   # primary 800 ms; 500 / 1000 ms
+      FAST: {primary: [-550, -50], s_w400: [-450, -50]}                           # primary 500 ms; 400 ms
+      IC: {primary: [-550, -50], s_w400: [-450, -50]}                             # primary 500 ms; 400 ms
+    edge_margin_s: 1.65                 # edge validity: FIR half-length on either side of the window
+    use_edge_flags: true                # trial-table edge_valid_<window> (joins, file edges) must be True
+    check_segments: true                # the window must also lie inside ONE preprocessing valid span with the
+                                        #   same margin (adds rail / flat / unusable spans to joins)
+    bad_annotation_prefix: BAD          # no overlap with any BAD* annotation of the cleaned Raw
+                                        #   (rejected, and asserted again on the final valid set)
+  artefact:
+    rule: roi200                        # name of the artefact rule
+    ptp_uv: 200.0                       # must equal configs/preprocessing.yaml artefacts.roi_ptp_uv
+    keep_equal: true                    # "> threshold" excludes; ptp exactly at threshold is kept
+  rois:
+    # min_channels: 5 of 8 for the primary ROI; the variants use ceil(5/8 x n) (the same 62.5% fraction).
+    primary:   {channels: [PO7, PO8, PO3, PO4, POz, O1, O2, Oz], min_channels: 5}  # posterior ROI
+    ptheta:    {channels: [O1, Oz, O2, PO3, PO7, PO4, PO8], min_channels: 5}       # the data owners' 7-channel ROI
+    mu:        {channels: [C3, Cz, C4, CP3, CPz, CP4], min_channels: 4}           # central mu ROI
+    mu_left:   {channels: [C3, CP3], min_channels: 2}                             # lateralisation
+    mu_right:  {channels: [C4, CP4], min_channels: 2}                             # lateralisation
+    half_left: {channels: [PO7, PO3, O1, POz], min_channels: 3}                   # hemisphere split (reliability)
+    half_right: {channels: [PO8, PO4, O2, Oz], min_channels: 3}                   # hemisphere split (reliability)
+  spectrum:
+    nfft: 1024                          # zero-padded, 0.5-Hz grid at 512 Hz
+    dpss:
+      bandwidth_hz: 2.0
+      low_bias: true
+      adaptive: false
+      normalization: full
+      remove_dc: true                   # MNE psd_array_multitaper default
+      raise_to_mne_minimum: true        # windows < 256 samples: bandwidth raised to MNE's minimum sfreq / n
+                                        #   (still one taper)
+    mt4:
+      bandwidth_hz: 4.0                 # 4-Hz multitaper variant; otherwise the dpss settings
+    welch:
+      window: hann                      # Welch variant
+      nperseg: 256                      # (min(n, 256) for shorter windows)
+      overlap_frac: 0.5
+      detrend: constant
+  bands:
+    iaf_half_width_hz: 2.0              # IAF +- 2 Hz
+    inclusive_tol_hz: 1.0e-6            # all grid bins in [lo, hi], inclusive
+    fixed:
+      s_band: [8.0, 12.0]               # fixed 8-12 Hz band
+      e9: [7.0, 13.0]                   # fixed 7-13 Hz band
+      ap_2p5_5: [2.5, 5.0]              # aperiodic power, low
+      ap_15_25: [15.0, 25.0]            # aperiodic power, high
+  split_time:
+    tasks: [AVSRT]                      # two half-windows, AVSRT only (each half 400 ms)
+  s_erp:
+    tasks: [FAST, IC]                   # previous evoked response removed
+    epoch_s: 2.0                        # template length after each stimulus
+    min_epochs: 10                      # fewer contributing epochs at a lag: no correction
+    leave_out_until: max_rt_window_end_next_stimulus   # see prestimulus_alpha.erp_corrected_windows
+  pc1:
+    tasks: [AVSRT]                      # post-stimulus desynchronisation
+    post_window_ms: [200, 600]
+  context:
+    lengths_s: [10.0, 20.0]             # a_ctx10, 20-s variant
+    min_valid_frac: 0.5                 # >= 50% valid samples
+    filter: {fir_design: firwin, fir_window: hamming, phase: zero}   # IAF +- 2 Hz band-pass, MNE default
+                                                                     #   transition bands, per valid span
+  spectra_fmax_hz: 40.0                 # mean spectra stored up to the low-pass edge
+
+decomposition:
+  min_block_windows: 10                 # block merge rule
+  merge_mode: {AVSRT: preceding, FAST: greedy, IC: preceding}   # AVSRT/IC: merge a small block into the
+                                        #   preceding one; FAST: 'greedy' (accumulate adjacent half-blocks in
+                                        #   order until a group has >= 10 windows; a small remainder joins the
+                                        #   preceding group), because 'preceding' collapses every FAST run into
+                                        #   one block
+  sd_ddof: 1                            # SD_i
+  blocks:                               # task-native blocks (trial-table columns)
+    AVSRT: [block_index_in_run]         # stimuli between consecutive 201 markers
+    FAST: [block_status, half_status]   # half-block
+    IC: [seq180_index]                  # 180-contour sequence
+  harm_half_window_s: 60.0              # running-mean variant: centred +-60-s running mean
+  harm_scope: run                       # running mean over the child's predictor-set windows of the same RUN,
+                                        #   across joins (time on the BDF clock, onset_s); 'segment' = same valid
+                                        #   span only
+  hist_n_prev: 5                        # a_hist5
+  hist_min_prev: 3
+  context_lengths_s: [10.0, 20.0]       # a_ctx10 / a_ctx20 z-scores
+  reliability_min_windows: 20           # fewer windows: reliability NA

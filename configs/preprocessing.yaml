@@ -1,0 +1,151 @@
+# EEG preprocessing configuration (preprocessing/; loader: preprocessing.config.load_preprocessing_config).
+# The loader rejects unknown keys and wrong types.
+
+version: "1.0"                   # label recorded in every QC record
+
+loading:
+  eog_channels: [EXG1, EXG2]               # typed eog (right / left outer canthus)
+  misc_channels: [EXG3, EXG4]              # typed misc (right / left mastoid)
+  drop_channels: [EXG5, EXG6, EXG7, EXG8]  # dropped (unconnected)
+  montage: biosemi64                       # names and order match the 64 EEG channels exactly
+  status_channel: Status
+  unconnected_check:                       # a dropped channel counts as "unconnected" if EITHER holds (QC only;
+    rail_v: -0.25                          #   the channel is dropped regardless): median raw value < -250 mV, or
+    max_sd_uv: 2.0                         #   1-40 Hz SD (per segment, valid spans) < 2 uV
+
+segments:
+  join_annotation: EDGE boundary           # zero-duration annotation at every Status bit-16 rising edge (block join)
+  rail:
+    threshold_v: -0.25                     # per-sample median over the 64 EEG channels below -250 mV
+    pad_s: 0.5                             # each rail span is widened by this on both sides
+    merge_gap_s: 1.0                       # rail spans separated by less than this are merged
+    min_duration_s: 0.0                    # spans shorter than this (before padding) are ignored
+  flat:
+    max_abs_diff_uv: 0.001                 # per-sample median |first difference| over EEG channels (< 1 LSB = 0.031 uV)
+    min_duration_s: 0.5
+    pad_s: 0.0
+  zero_skip_spans: true                    # after filtering, samples inside BAD_rail / BAD_flat / BAD_unusable /
+                                           #   BAD_short are set to 0
+  min_valid_span_s: auto                   # a valid piece shorter than this becomes BAD_short (unusable) before any
+                                           #   filter, PyPREP or ICA; auto = the longest per-span FIR kernel
+                                           #   (1691 taps = 3.30 s at 512 Hz)
+
+filters:
+  analysis:                                # 1-40 Hz zero-phase FIR (firwin, Hamming), separately per segment
+    l_freq: 1.0
+    h_freq: 40.0
+    l_trans_bandwidth: auto                # MNE auto: 1 Hz -> 1691 taps at 512 Hz (half-length 1.65 s)
+    h_trans_bandwidth: auto                # MNE auto: 10 Hz (-6 dB at 45 Hz; >= 50.6 dB attenuation from 50 Hz)
+    filter_length: auto
+    fir_window: hamming
+    fir_design: firwin
+    phase: zero
+    pad: reflect_limited
+  highpass_copy:                           # copy for bad-channel detection and the ICA fit (ICLabel: 1-100 Hz, avg ref)
+    l_freq: 1.0
+    h_freq: 100.0
+    l_trans_bandwidth: auto
+    h_trans_bandwidth: auto
+    filter_length: auto
+    fir_window: hamming
+    fir_design: firwin
+    phase: zero
+    pad: reflect_limited
+
+line_noise:
+  analysis_strategy: lowpass_40            # 'lowpass_40': no notch, 60 Hz lies in the 40-Hz FIR stopband
+                                           #   (-59 dB); 'notch': also notch `notch_freqs` in the analysis copy
+  notch_freqs: [60.0, 120.0]               # mains 60 Hz (+ harmonic); used by bad-channel detection (bad_channels.notch)
+  ica_notch: false                         # no notch in the ICA fit copy
+  report_freq: 60.0                        # QC: 60-Hz peak on the 1-100 Hz copy
+
+bad_channels:
+  method: pyprep_noisychannels             # PyPREP NoisyChannels inside a robust-reference loop, run on valid
+                                           #   spans only (joins, rails and unusable spans never reach it)
+  criteria: [nan_flat, deviation, correlation, ransac]   # hf_noise, snr and psd not used
+  deviation_threshold: 5.0                 # PREP default
+  hf_noise_threshold: 5.0                  # unused (hf_noise not in criteria); kept for the schema
+  correlation_secs: 1.0                    # PREP defaults
+  correlation_threshold: 0.4
+  correlation_frac_bad: 0.01
+  correlation_min_bad_windows: 5           # a correlation / dropout flag also needs >= 5 bad 1-s windows
+  ransac:                                  # PREP / PyPREP defaults
+    n_samples: 50
+    sample_prop: 0.25
+    corr_thresh: 0.75
+    frac_bad: 0.4
+    corr_window_secs: 5.0
+    channel_wise: false
+  saturation:                              # |raw| > threshold in more than max_frac of the valid samples
+    threshold_v: 0.25                      #   (intermittent rail-to-rail faults)
+    max_frac: 0.001
+  notch: true                              # notch line_noise.notch_freqs in the detection copy
+  decimate: 2                              # detection copy 512 -> 256 Hz (after the 100-Hz low-pass; no aliasing)
+  ransac_pass: final                       # RANSAC once, on the final mean-of-good reference, with only good
+                                           #   channels as predictors (not on the median-reference first pass)
+  robust_reference:
+    initial: median                        # first pass on data referenced to the per-sample channel median
+    max_iterations: 4                      # then mean of the not-yet-bad channels, until the bad set is stable
+  max_bad_fraction_warn: 0.25              # warning if more EEG channels than this are bad
+  manual_bads_from_known_issues: true      # set_channel_status entries of the known-issues registry
+
+reference:
+  method: robust_average                   # mean of the good EEG channels, subtracted from every EEG channel
+
+interpolation:
+  method: spline                           # spherical spline (MNE interpolate_bads, mode accurate)
+  origin: auto
+
+ica:
+  enabled: true                            # store an ICA solution for every recording (no-ICA variant: load_clean(apply_ica=False))
+  method: picard                           # Picard(extended=True, ortho=False) = extended infomax, the
+  fit_params:                              #   decomposition ICLabel was trained on
+    extended: true
+    ortho: false
+  max_iter: 1000
+  n_components: auto                       # auto = min(rank, floor(sqrt(n_fit_samples / min_samples_factor)), max_components)
+  max_components: null
+  min_samples_factor: 20                   # k in n_samples >= k * n_components^2
+  decimate: 2                              # fit on every 2nd sample (256 Hz) when that keeps n_components at the cap
+  fit_reject_ptp_uv: 1000.0                # 1-s chunks of the fit copy with any good channel above this
+  fit_reject_chunk_s: 1.0                  #   peak-to-peak are left out of the fit (gross movement; blinks are kept)
+  iclabel:
+    rule: argmax_and_threshold             # 'threshold' (p >= thr) or 'argmax_and_threshold' (also the top class)
+    exclude:                               # ICLabel class -> minimum probability: eye only. mne-icalabel's
+      eye blink: 0.8                       #   'eye blink' is ICLabel's 'Eye' class (blinks AND eye movements)
+  apply_in_primary: true                   # the primary alpha uses the ICA-corrected data
+
+ica_selection:                             # re-selection step on the ICA solution (preprocessing.ica_selection)
+  alpha_veto:                              # an ICLabel-excluded component is kept (never removed) if BOTH hold:
+    enabled: true
+    band_hz: [7.0, 13.0]                   #   (1) its source spectrum has a local maximum in 7-13 Hz that lies >= min_peak_db
+    min_peak_db: 3.0                       #       above a straight-line (1/f) fit of log10 power vs log10 frequency over
+    aperiodic_fit_hz: [2.0, 30.0]          #       2-30 Hz with the 7-13 Hz band left out of the fit;
+    welch_window_s: 2.0                    #       spectrum: Welch, Hann 2-s windows, 50% overlap (0.5-Hz bins), on the
+    welch_overlap: 0.5                     #       ICA fit data (valid spans, fit-rejected chunks left out);
+    min_posterior_share: 0.5               #   (2) its pattern (mixing column, average reference) puts >= 50% of the summed
+    posterior_channels: [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, Pz, PO3, PO4, PO7, PO8, POz, O1, O2, Oz]
+                                           #       squared weights on the P / PO / O channels (19 of 64; Iz not included)
+  mark_fit_rejected: true                  # the 1-s chunks left out of the ICA fit (> ica.fit_reject_ptp_uv) are
+  fit_rejected_description: BAD_icafit     #   stored as spans and added by load_clean as BAD_icafit annotations in both the
+                                           #   ICA and the no-ICA variant (windows overlapping them are invalid in both)
+
+artefacts:
+  roi: [PO7, PO8, PO3, PO4, POz, O1, O2, Oz]   # posterior alpha ROI
+  roi_ptp_uv: 200.0                        # ROI peak-to-peak rule for prestimulus windows (200 uV)
+  qc_chunk_s: 1.0                          # residual QC: non-overlapping chunks inside valid spans
+  frontal_proxy: [Fp1, Fp2]                # residual QC: blink proxy SD before / after ICA
+
+ocular:                                    # pointer: configs/ocular.yaml holds the ocular-copy and EXG QC parameters.
+                                           # Only the channel list is repeated, and it is checked against ocular.yaml
+                                           # (utils.config_ocular.check_preprocessing_stub)
+  channels: [Fp1, Fp2, EXG1, EXG2, EXG3, EXG4, F7, F8, T7, T8]   # non-high-passed copy incl. the EXG fallbacks
+
+storage:
+  subdir: preproc                          # <derivatives>/preproc/<task>/<subject>/
+  fmt: single                              # float32 FIF
+
+runtime:
+  n_jobs: 8                                # recordings in parallel
+  random_seed: 20261020                    # RANSAC and ICA
+  threads_per_worker: 1                    # BLAS / OpenMP / onnxruntime threads per recording

@@ -1,0 +1,48 @@
+# BOSC-type alpha bursts and per-trial burst occupancy.
+# Read by feature_extraction.bursts.load_burst_config (every key below is a BurstConfig field; unknown keys are an
+# error).
+bursts:
+  version: 1
+
+  # ---- ROI signal: mean of the good channels of the posterior ROI (bad channels dropped, not interpolated).
+  roi: [PO7, PO8, PO3, PO4, POz, O1, O2, Oz]     # fixed; the loader checks it against bursts.SPEC_ROI
+  min_roi_channels: 5                            # fewer good ROI channels -> every window NaN
+
+  # ---- TFR: BOSC_tf.m Morlet on the continuous ROI signal, separately in each valid span (between joins).
+  wavenumber: 6                                  # cycles; sigma_t = wavenumber / (2 pi f)
+  band_half_width_hz: 2.0                        # band = IAF +- 2 Hz, both edges included
+  band_step_hz: 0.5                              # -> 9 band frequencies
+  edge_sd: 3.6                                   # edge zone of each span = ceil(3.6 sigma_t fs) samples per frequency,
+                                                 # set to NaN (invalid), never padded: 3.6 sigma_t is the full
+                                                 # half-support of the truncated BOSC wavelet (491 ms at 7 Hz)
+  method: fft                                    # fft (scipy fftconvolve) | direct (np.convolve)
+
+  # ---- Run-level background: wavelet-power spectrum of the ROI signal over the valid, artefact-free samples.
+  bg_freqs: [2.0, 30.0, 0.5]                     # start, stop (inclusive), step (Hz); linear grid (specparam needs it)
+  bg_fit_range: [2.0, 30.0]
+  aperiodic_mode: fixed                          # specparam 2.0 (primary background; fBOSC-style)
+  peak_width_limits: [1.0, 8.0]
+  max_n_peaks: 6
+  min_peak_height: 0.05
+  min_r2: 0.9                                    # specparam R^2 below this -> eBOSC robustfit fallback (recorded)
+  exclude_peak_hz: [6.0, 14.0]                   # robustfit (eBOSC_getThresholds.m): peak search range; +- half the
+                                                 # wavelet spectral FWHM around the peak is left out of the fit
+  artefact_ptp_uv: 200.0                         # background uses 1-s chunks with every good ROI channel within
+  artefact_chunk_s: 1.0                          # 200 uV peak-to-peak
+
+  # ---- Threshold calibration: pt(f) = chi2.ppf(p, 2) / 2 * mp(f).
+  # Variant = <background>_<calibration>. 'arithmetic': mp fitted to the arithmetic mean of linear wavelet power, so
+  # pt has its nominal exceedance (pure noise: ~5 % of TF points above pt at p = .95, ~1 % at p = .99).
+  # 'geometric': mp fitted to 10^mean(log10 power) as in published BOSC/eBOSC/fBOSC (~18.6 % / 7.5 % of pure-noise
+  # points above pt). First entry = primary (column burst_occ*).
+  variants: [specparam_arithmetic, robustfit_arithmetic, robustfit_geometric]
+  #           primary              BOSC fit cross-check  published eBOSC (comparison only)
+
+  # ---- Duration rule and grid: (percentile, cycles); a run must last >= cycles * fs / f samples at frequency f.
+  grid: [[0.95, 2], [0.95, 3], [0.99, 2], [0.99, 3]]   # first = primary (95th percentile, >= 2 cycles)
+  matlab_marking: false                          # true = BOSC_detect.m one-sample marking (MATLAB comparison only)
+
+  # ---- Trial window: [-W + start_offset, stop) ms relative to onset = [-W-50, -250) ms (half-open).
+  window_start_offset_ms: -50.0
+  window_stop_ms: -250.0
+  task_window_ms: {AVSRT: 800, FAST: 500, IC: 500}   # W per task; checked against events.yaml

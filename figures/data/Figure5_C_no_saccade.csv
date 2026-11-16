@@ -1,0 +1,2 @@
+task,trials,coupling_diff_pct,ci_lo,ci_hi,p
+FAST,no saccade in the alpha window,-1.592382967,-2.55962326,-0.6251426731,0.00126321372

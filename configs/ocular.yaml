@@ -1,0 +1,81 @@
+# Ocular covariates, blink / saccade detection and EXG QC.
+# Read by utils.config_ocular.load_ocular_config and used by preprocessing.{ocular,ocular_indices,exg_qc}.
+#
+# Units: thresholds are in the unit named by the key suffix (_uv, _mv, _s, _ms, _hz). MNE data are in volts.
+
+channels:
+  fp: [Fp1, Fp2]                  # VEOG proxy positive pole (no infra-orbital electrode exists)
+  heog_pair: [EXG1, EXG2]         # HEOG = EXG1 - EXG2 (right minus left outer canthus)
+  mastoids: [EXG3, EXG4]          # VEOG reference = mean(EXG3, EXG4) (right/left mastoid)
+  heog_fallback_pair: [F7, F8]    # HEOG := F7 - F8 if EXG1 or EXG2 fails QC (opposite polarity to EXG1 - EXG2;
+                                  #   every index computed here is sign-invariant for HEOG)
+  ref_fallback: [T7, T8]          # reference := mean(T7, T8) if EXG3 or EXG4 fails QC
+  # If one of Fp1/Fp2 is passed as bad, the VEOG proxy uses the remaining one
+  allow_single_fp: true
+
+ocular_copy:
+  # Built from the raw (DC-coupled, CMS-referenced) BDF data; NO high-pass anywhere.
+  # Every filter runs separately inside each valid piece (segments between Status bit-16 joins, minus rail spans).
+  lowpass_slow_hz: 5.0            # closure and gaze-deviation indices
+  lowpass_fast_hz: 15.0           # blink detection, saccade detection and window log-SD
+  fir_design: firwin              # zero-phase FIR, Hamming window, MNE 'auto' transition bandwidth / length
+  fir_window: hamming
+  decim: 8                        # 512 Hz -> 64 Hz by taking every 8th sample AFTER the low-pass (anti-alias check:
+                                  # lowpass_fast + transition band must lie below the new Nyquist, else ValueError)
+  store_lp15_constituents: true   # keep Fp1, Fp2, EXG1-4, F7, F8, T7, T8 (15-Hz low-passed) in the copy
+
+indices:
+  # Alpha windows: [start, stop) ms relative to stimulus onset.
+  windows_ms:
+    AVSRT: [-850, -50]
+    FAST: [-550, -50]
+    IC: [-550, -50]
+  closure_window_ms: [-1500, -50]
+  running_median_half_s: 30.0     # +-30 s running median (closure, gaze_dev)
+  running_median_min_coverage: 0.5   # min fraction of the 60-s running-median window with valid data
+  logsd_detrend: linear           # heog/vfp log-SD: SD of the 15-Hz low-passed signal in the alpha window
+                                  # after removing the window's linear trend
+  log_base: 10                    # log10 SD
+
+blinks:
+  # Peak rule on the VEOG proxy (15-Hz copy, 64 Hz), band-passed 1-10 Hz (the band of mne.preprocessing.find_eog_events),
+  # positive peaks (Fp positive during blinks).
+  band_hz: [1.0, 10.0]
+  polarity: positive
+  k_mad: 5.0                      # prominence threshold = clip(k_mad * robust background sigma, min, max)
+  min_prominence_uv: 60.0
+  max_threshold_uv: 150.0         # cap so very noisy files keep their (large) blinks
+  sigma_iterations: 3             # background sigma: MAD, iteratively excluding +-0.25 s around detected blinks
+  width_s: [0.05, 0.6]            # full width at half prominence
+  min_separation_s: 0.2
+  local_wlen_s: 1.0               # sharpness check on the 15-Hz VEOG (no band-pass): prominence within a 1-s window
+  local_max_width_s: 0.5          #   must also exceed the threshold, with full width at half prominence <= 0.5 s
+                                  #   (rejects slow eye movements / drifts that pass the 1-Hz band-pass edge)
+  extent_pad_fwhm: 0.5            # blink extent = half-prominence interval padded by 0.5 x FWHM on each side
+                                  # (~ the full duration of a raised-cosine blink); used for blink_in_window
+
+exg_qc:
+  # A failed channel triggers the channel fallbacks above; it never excludes the file.
+  channels: [EXG1, EXG2, EXG3, EXG4]
+  band_hz: [1.0, 40.0]            # filtered copy for the chunk SDs (zero-phase FIR, per piece, after DC removal)
+  chunk_s: 2.0                    # non-overlapping chunks, inside pieces only
+  sat_threshold_mv: 250.0         # |raw| > 250 mV = saturated / at the rail
+  bad_chunk_sd_uv: 200.0          # chunk is bad if filtered SD > 200 uV ...
+  bad_chunk_absmean_mv: 250.0     # ... or |raw chunk mean| > 250 mV ...
+  bad_chunk_step_mv: 10.0         # ... or any raw sample-to-sample step > 10 mV (rail-to-rail swings)
+  max_frac_sat: 0.01
+  max_frac_bad_chunks: 0.05       # ... and the fraction must rest on >= min_bad_chunks bad chunks
+  min_bad_chunks: 3
+  min_median_chunk_sd_uv: 2.0
+  max_median_chunk_sd_uv: 200.0
+
+saccades:                         # horizontal saccades: HEOG step rule (preprocessing.ocular_indices.detect_saccades)
+  rule: step_like                 # |mean(x[t, t+h)) - mean(x[t-h, t))| > step_uv, h = within_ms / 2 (moving-window step
+                                  #   function of ERPLAB-style HEOG screening); a sustained change of level, so brief
+                                  #   EMG / electrode transients do not pass
+  signal: HEOG_lp15               # EXG1 - EXG2, 15-Hz copy (64 Hz); only recordings whose HEOG is the EXG pair
+  step_uv: 64.0                   # about 3-4.5 deg at the adult 14-20 uV/deg HEOG gain
+  within_ms: 150.0                # full window (2 x 75 ms)
+  refractory_ms: 0.0              # consecutive supra-threshold samples already form one event
+  exclude_blinks: true            # drop events overlapping a blink extent (blinks: section) widened by blink_pad_ms
+  blink_pad_ms: 100.0

@@ -1,0 +1,6 @@
+task,axis,sign,from_hz,to_hz,n_bins,p
+FAST,absolute,negative,8.5,10.5,5,0.0314
+FAST,absolute,negative,24.5,24.5,1,0.845
+FAST,absolute,positive,39,39,1,0.8568
+FAST,iaf_aligned,negative,-1,1,5,0.0188
+FAST,iaf_aligned,negative,16.5,16.5,1,0.5962

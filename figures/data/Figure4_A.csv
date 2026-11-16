@@ -1,0 +1,36 @@
+analysis,dimension,role,estimate_pct,ci_lo,ci_hi
+Main group model,Main,main,-1.639511942,-2.598220357,-0.6808035267
+400-ms window,Alpha measure,variant,-1.525801873,-2.490874683,-0.560729064
+Welch estimator,Alpha measure,variant,-1.680062318,-2.604269259,-0.7558553777
+4-Hz multitaper,Alpha measure,variant,-1.703718052,-2.634533418,-0.7729026854
+fixed 8–12 Hz band,Alpha measure,variant,-1.561026763,-2.566076455,-0.5559770721
+original authors' 7-channel ROI,Alpha measure,variant,-1.651510711,-2.622841803,-0.6801796189
+IAF from main-day rest,Alpha measure,variant,-1.64482391,-2.609306607,-0.6803412128
+no ICA correction,Alpha measure,variant,-1.484871067,-2.437462726,-0.5322794072
+previous evoked response removed,Alpha measure,variant,-1.659797942,-2.616735033,-0.7028608519
++ aperiodic power,Covariates,variant,-1.645281571,-2.605728058,-0.6848350844
++ previous-onset interval,Covariates,variant,-1.631650168,-2.594194081,-0.6691062552
++ previous RT,Covariates,variant,-1.662490624,-2.626054746,-0.6989265021
++ alpha × retained fraction,Covariates,variant,-1.674641405,-2.649150965,-0.7001318448
++ alpha × FSIQ,Covariates,variant,-1.979255014,-3.038855172,-0.9196548564
++ alpha × data quality,Covariates,variant,-1.675783308,-2.660445124,-0.6911214921
+history-homogeneous trials,Trials,variant,-1.783687414,-2.937478935,-0.6298958925
+blink-free windows,Trials,variant,-1.670722426,-2.777437246,-0.5640076064
+no saccade in alpha window,Trials,variant,-1.592382967,-2.55962326,-0.6251426731
+no saccade −550 to +300 ms,Trials,variant,-1.557598687,-2.526885419,-0.5883119545
+RT 100–1500 ms,Trials,variant,-1.944669386,-2.90542461,-0.9839141623
+RT 150–1200 ms,Trials,variant,-1.967341328,-2.922017517,-1.01266514
+nominal trial cap,Trials,variant,-1.652636979,-2.611225698,-0.694048261
+trial counts matched,Trials,variant,-1.644826793,-2.595002804,-0.6946507823
+non-performers kept,Children,variant,-1.63954786,-2.578694826,-0.7004008937
+fallback-IAF children out,Children,variant,-1.558373777,-2.611389285,-0.5053582679
+FSIQ < 80 out,Children,variant,-1.863253263,-2.856046027,-0.8704604983
+medication out,Children,variant,-1.645534656,-2.621161718,-0.6699075944
+medication out (strict),Children,variant,-1.710545881,-2.676395057,-0.7446967046
+≥ 60 trials per child,Children,variant,-1.635993039,-2.603826424,-0.6681596547
+boys only,Children,variant,-1.400282805,-2.657009368,-0.1435562414
+ages ≤ 12.9 years (TD range),Children,variant,-1.559051253,-2.523024315,-0.5950781903
+group-specific variances,Model,variant,-1.65553157,-2.580904557,-0.7301585831
+true-score (reliability) calibration,Model,variant,-2.027315914,-3.267257292,-0.7529605563
+two-stage per-child slopes,Model,variant,-1.633490096,-2.524394147,-0.7425860458
+EOG indices (failed validation),Model,descriptive,-1.645291159,-2.60600438,-0.6845779375
